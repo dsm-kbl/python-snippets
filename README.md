@@ -1,3 +1,3 @@
 # python-snippets
 
-### Switching to branch alpha
+### Switching to branch alpha beta
