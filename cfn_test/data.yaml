@@ -1,0 +1,194 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Stack for DPP PM Data pipeline resources
+Parameters:
+  OrgScope:
+    Description: Alphanumeric/hyphenated Organisational Scope, abbreviation like pp
+    Type: String
+  Company:
+    Description: Name of the Company, abbriviation like vw
+    Type: String
+  Entity:
+    Description: Plantkey, like 1100
+    Type: String
+  FunctionalScope:
+    Description: Alphanumeric/hyphenated Functional Scope
+    Type: String
+  Region:
+    Description: AWS Region in 4 characters.
+    Type: String
+  Environment:
+    Type: String
+    Description: Environment name (dev, int, or prod)
+
+Resources:
+  ############################################################################
+  # S3
+  ############################################################################
+
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "bkt-${OrgScope}-${Company}-${Entity}-${FunctionalScope}-${dataLayer}-${ProfinetName}-${Region}-${Environment}"
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !GetAtt DataKey.Arn
+              SSEAlgorithm: aws:kms
+      VersioningConfiguration:
+        Status: ${s3versioningEnable}
+      LoggingConfiguration:
+        LogFilePrefix: !Sub ${dataLayer}/${Entity}${ProfinetName}/
+        DestinationBucketName: !Ref AccessLogsBucket
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: "s3:ObjectCreated:*"
+            Function: "${s3eventArn}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpirationRule
+            Status: Enabled
+            ExpirationInDays: ${s3expirationindays}
+            NoncurrentVersionExpirationInDays: ${s3expirationindays}
+      Tags:
+        - Key: TaggingVersion
+          Value: 1.0
+        - Key: Name
+          Value: !Sub bkt-${OrgScope}-${Company}-${Entity}-${FunctionalScope}-${dataLayer}-${ProfinetName}-${Region}-${Environment}
+        - Key: BucketId
+          Value: !Sub ${ProfinetName}
+        - Key: Environment
+          Value: !Ref Environment
+
+  DataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "${ArnPrincipal}"
+            Action: s3:GetObject
+            Resource: "*"
+
+  AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub bkt-${OrgScope}-${Company}-${Entity}-${FunctionalScope}-${dataLayer}-accesslogs-${Region}-${Environment}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpirationRule
+            Status: Enabled
+            ExpirationInDays: "730"
+          - Id: ExpirationRuleVersionEnabled
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: "730"
+      AccessControl: LogDeliveryWrite
+      Tags:
+        - Key: TaggingVersion
+          Value: 1.0
+        - Key: Name
+          Value: !Sub bkt-${OrgScope}-${Company}-${Entity}-${FunctionalScope}-${dataLayer}-accesslogs-${Region}-${Environment}
+        - Key: BucketId
+          Value: Accesslogs
+        - Key: Environment
+          Value: !Ref Environment
+
+  #AccessLogsBucketPolicy:
+  #  Type: AWS::S3::BucketPolicy
+  #  Properties:
+  #    Bucket: !Ref AccessLogsBucket
+  #    PolicyDocument:
+  #      Statement:
+  #        - Effect: Deny
+  #          Action: s3:DeleteObject
+  #          Principal: "*"
+  #          Resource: !Sub
+  #            - arn:aws:s3:::${BucketName}/*
+  #            - { BucketName: !Ref AccessLogsBucket }
+
+  ############################################################################
+  # KMS
+  ############################################################################
+
+  DataKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub ${dataLayer} Key.
+      Enabled: True
+      EnableKeyRotation: True
+      KeyPolicy:
+        Version: "2012-10-17"
+        Id: !Sub "kpl.${OrgScope}.${Company}.${Entity}.${FunctionalScope}.${dataLayer}.${Environment}"
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+          - Sid: Allow access for Key Administrators
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:role/PA_DEVELOPER
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:TagResource
+              - kms:UntagResource
+              - kms:CancelKeyDeletion
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt
+              - kms:GenerateDataKey
+              - kms:DescribeKey
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: "*"
+      Tags:
+        - Key: TaggingVersion
+          Value: 1.0
+        - Key: Name
+          Value: !Sub "cmk-${OrgScope}-${Company}-${Entity}-${FunctionalScope}-${dataLayer}-${Environment}"
+        - Key: dataLayer
+          Value: !Sub "${dataLayer}"
+        - Key: Environment
+          Value: !Ref Environment
+
+  DataKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/cmk-${OrgScope}-${Company}-${Entity}-${FunctionalScope}-${dataLayer}-${Environment}"
+      TargetKeyId: !Ref DataKey
+
+Outputs:
+  DataKeyArn:
+    Description: Data Key ARN
+    Value: !Sub "${DataKey.Arn}"
+    Export:
+      Name: !Sub "cmk-${OrgScope}-${Company}-${Entity}-${FunctionalScope}-${dataLayer}-${Environment}-Arn"
+
+  PrepDataKeyArn:
+    Description: Data Key ARN
+    Value: !Sub "${PrepDataKey.Arn}"
+    Export:
+      Name: !Sub "cmk-${OrgScope}-${Company}-${Entity}-${FunctionalScope}-${dataLayer}-${Environment}-Arn"

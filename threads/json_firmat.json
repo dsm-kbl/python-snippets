@@ -1,0 +1,118 @@
+{
+    "coreThing" : {
+
+
+
+      "caPath" : "root.ca.pem",
+
+
+
+      "certPath" : "-certificate.pem.crt",//$
+
+
+
+      "keyPath" : "-private.pem.key",//$
+
+
+
+      "thingArn" : "arn:aws:iot:eu-west-1:255023852494:thing/Gate46ZebraReader",//$
+
+
+
+      "iotHost" : "-ats.iot.eu-west-1.amazonaws.com", //$
+
+
+
+      "ggHost" : "greengrass-ats.iot.eu-west-1.amazonaws.com",
+
+
+
+      "keepAlive" : 600,
+
+
+
+      "mqttOperationTimeout": 60
+
+
+
+    },
+
+
+
+    "runtime" : {
+
+
+
+      "cgroup" : {
+
+
+
+        "useSystemd" : "yes"
+
+
+
+      }
+
+
+
+    },
+
+
+
+    "managedRespawn" : false,
+
+
+
+    "crypto" : {
+
+
+
+      "principals" : {
+
+
+
+        "SecretsManager" : {
+
+
+
+          "privateKeyPath" : "file:///greengrass/certs/-private.pem.key"//$
+
+
+
+        },
+
+
+
+        "IoTCertificate" : {
+
+
+
+          "privateKeyPath" : "file:///greengrass/certs/-private.pem.key",//$
+
+
+
+          "certificatePath" : "file:///greengrass/certs/-certificate.pem.crt"//$
+
+
+
+        }
+
+
+
+      },
+
+
+
+      "caPath" : "file:///greengrass/certs/root.ca.pem"
+
+
+
+    },
+
+
+
+    "writeDirectory" : "/mnt/data/greengrass/ggc"
+
+
+
+  }
